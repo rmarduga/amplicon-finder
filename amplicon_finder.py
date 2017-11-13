@@ -12,10 +12,6 @@ from pomegranate import DiscreteDistribution, State, HiddenMarkovModel
 import multiprocessing
 import argparse
 
-os.system('taskset -p 0xffffffff %d' % os.getpid())
-
-
-
 def getChromosomeListFromBam(path):
     rows = pysam.view("-H", path)
     r = []
@@ -127,11 +123,6 @@ def printAmpliconInBedFormat(ch, amps):
 
 
 def getAmpliconsInChromosome(hg19ChromosomeSizesEntry):
-    if args.germline_bam:
-        print("germline_bam : {}".format(args.germline_bam))
-    else:
-        print("germline_bam : None")
-    exit(0)
     chromosome, size = hg19ChromosomeSizesEntry
     if args.germline_bam:
         cov, coord = calculateChromosomeRelativeCoverage(args.tumor_bam, args.germline_bam, chromosome, size, args.window)
