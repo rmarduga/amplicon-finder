@@ -12,6 +12,12 @@ from pomegranate import DiscreteDistribution, State, HiddenMarkovModel
 import multiprocessing
 import argparse
 
+proc_num_f = os.popen( 'cat /proc/cpuinfo | grep ''^processor'' | wc -l')
+proc_num = int(proc_num_f.read())
+affinity_flag = pow(2, proc_num) - 1
+#print (hex(affinity_flag))
+os.system('taskset -p {} {}'.format(hex(affinity_flag), os.getpid()))
+
 def getChromosomeListFromBam(path):
     rows = pysam.view("-H", path)
     r = []
@@ -64,14 +70,10 @@ def calculateChromosomeRelativeCoverage(pathToTumorBam, pathToGermlineBam, chrom
         tumor_cov = [0 for i in range(0, (size // block_size) + 1)]
         start = 0
         for pileupcolumn in germSamfile.pileup(chromosome, 0, size):
-            if pileupcolumn.pos > size:
-                print('pileupcolumn.pos={}'.format(pileupcolumn.pos))
-                break
+            #if pileupcolumn.pos <= size:
             germ_cov[pileupcolumn.pos // block_size] += pileupcolumn.n
         for pileupcolumn in tumorSamfile.pileup(chromosome, 0, size):
-            if pileupcolumn.pos > size:
-                print('pileupcolumn.pos={}'.format(pileupcolumn.pos))
-                break
+            #if pileupcolumn.pos <= size:
             tumor_cov[pileupcolumn.pos // block_size] += pileupcolumn.n
         for i in range(0, size // block_size):
             relative_interval_cov = 1.0
