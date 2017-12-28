@@ -100,12 +100,12 @@ def predictAmpliconesInChromosome(cov, coord, coverageThreshold):
     covAvg = np.average(covArr)
     covStd = np.std(covArr)
     amp = [1 if x > covAvg + coverageThreshold * covStd else 0 for x in cov]
-    bkgdDist = DiscreteDistribution({0: 0.85, 1: 0.15})
-    ampDist  = DiscreteDistribution({0: 0.15, 1: 0.85})
+    bkgdDist = DiscreteDistribution({0: 0.80, 1: 0.20})
+    ampDist  = DiscreteDistribution({0: 0.20, 1: 0.80})
     s1 = State( bkgdDist, name='background' )
     s2 = State( ampDist, name='amplicon' )
-    alpha = 1e-20
-    beta = 1e-20
+    alpha = 1e-15
+    beta = 1e-15
     hmm = HiddenMarkovModel()
     hmm.add_states(s1, s2)
     hmm.add_transition( hmm.start, s1, 1-alpha )
