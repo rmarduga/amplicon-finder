@@ -127,7 +127,8 @@ def predictAmpliconesInChromosome(cov, coord, coverageThreshold):
     return amps
 
 def printAmpliconInBedFormat(ch, amps):
-    print('\n'.join("{}\t{}\t{}".format(ch,  amps[i][0], amps[i][1]) for i in range(0,len(amps))))
+    if len(amps) > 0:
+        print('\n'.join("{}\t{}\t{}".format(ch,  amps[i][0], amps[i][1]) for i in range(0,len(amps))))
 
 
 def getAmpliconsInChromosome(hg19ChromosomeSizesEntry):
