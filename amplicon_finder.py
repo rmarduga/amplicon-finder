@@ -12,16 +12,16 @@ from pomegranate import DiscreteDistribution, State, HiddenMarkovModel
 import multiprocessing
 import argparse
 
-def setAffinity():
-    proc_num_f = os.popen( 'cat /proc/cpuinfo | grep ''^processor'' | wc -l')
-    proc_num = int(proc_num_f.read())
-    proc_num_f.close()
-    affinity_flag = pow(2, proc_num) - 1
-    #print (hex(affinity_flag))
-    os.system(('taskset -p {} {}'.format(hex(affinity_flag), os.getpid())))
-    affinity_f = os.popen('taskset -p {} {}'.format(hex(affinity_flag), os.getpid()))
-    affinity_f.close()
-
+#def setAffinity():
+#    proc_num_f = os.popen( 'cat /proc/cpuinfo | grep ''^processor'' | wc -l')
+#    proc_num = int(proc_num_f.read())
+#    proc_num_f.close()
+#    affinity_flag = pow(2, proc_num) - 1
+#    #print (hex(affinity_flag))
+#    os.system(('taskset -p {} {}'.format(hex(affinity_flag), os.getpid())))
+#    affinity_f = os.popen('taskset -p {} {}'.format(hex(affinity_flag), os.getpid()))
+#    affinity_f.close()
+#
 def getChromosomeListFromBam(path):
     rows = pysam.view("-H", path)
     r = []
@@ -140,7 +140,7 @@ def getAmpliconsInChromosome(hg19ChromosomeSizesEntry):
     return (chromosome, amps)
     
 if __name__ == '__main__':
-    setAffinity()
+#    setAffinity()
     parser = argparse.ArgumentParser(description='Find the amplicons in a BAM file.')
     parser.add_argument('tumor_bam', metavar='<tumor_bam>', type=str, help='Path to the tumor bam file')
     parser.add_argument('germline_bam', metavar='<germline_bam>', type=str, nargs='?', help='Path to the germline bam file. If provided, relative coveage between tumor and germline samples will be used. (Optional)')
