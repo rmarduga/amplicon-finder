@@ -52,7 +52,11 @@ def calculateChromosomeCoverageInBamFile(pathToBam, chromosome, size, blockSize)
             if (pileupcolumn.pos // blockSize) * blockSize  != start:
                 cov.append(interval_cov / blockSize)
                 coord.append(start)
+                start_prev = start
                 start = (pileupcolumn.pos // blockSize) * blockSize
+                for i in range(start_prev + blockSize, start, blockSize):
+                    cov.append(0)
+                    coord.append(i)
                 interval_cov = 0
             interval_cov += pileupcolumn.n
     except ValueError as err:
