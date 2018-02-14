@@ -11,6 +11,8 @@ import numpy as np
 from pomegranate import DiscreteDistribution, State, HiddenMarkovModel
 import multiprocessing
 import argparse
+import csv
+
 
 #def setAffinity():
 #    proc_num_f = os.popen( 'cat /proc/cpuinfo | grep ''^processor'' | wc -l')
@@ -40,66 +42,37 @@ def getChromosomeListFromBam(path):
 
 
 
-def calculateChromosomeCoverageInBamFile(pathToBam, chromosome, chromosomeSize, window):
-    samfile = pysam.AlignmentFile(pathToBam, "rb" )
-    cov = []
-    coord = []
-    try:
-        start = -1
-        interval_cov = 0
-        start = 0
-        for pileupcolumn in samfile.pileup(chromosome, 0, chromosomeSize):
-            if (pileupcolumn.pos // window) * window  != start:
-                cov.append(interval_cov / window)
-                coord.append(start)
-                start_prev = start
-                start = (pileupcolumn.pos // window) * window
-                for i in range(start_prev + window, start, window):
-                    cov.append(0)
-                    coord.append(i)
-                interval_cov = 0
-            interval_cov += pileupcolumn.n
-    except ValueError as err:
-        print( err )
-        cov   = []
-        coord = []
-    samfile.close()
+def calculateChromosomeCoverageInBamFile(tumorCoverageData, chromosome, chromosomeSize, windowSize):
+    start = 0
+    cov   = [0 for i in range(0, (chromosomeSize // windowSize) + 1 )]
+    coord = [100 * i for i in range(0, (chromosomeSize // windowSize) + 1 )]
+    for i in range(0, chromosomeSize):
+        cov[ i // windowSize] += tumorCoverageData[i]
     return (cov, coord)
     
-def calculateChromosomeRelativeCoverage(pathToTumorBam, pathToGermlineBam, chromosome, chromosomeSize, window):
-    germSamfile = pysam.AlignmentFile(pathToGermlineBam, "rb" )
-    tumorSamfile = pysam.AlignmentFile(pathToTumorBam, "rb" )
+def calculateChromosomeRelativeCoverage(tumorCoverageData, germlineCoverageData, chromosome, chromosomeSize, windowSize):
     relative_cov = []
     coord = []
-    try:
-        start = -1
-        germ_cov = [0 for i in range(0, (chromosomeSize // window) + 1 )]
-        tumor_cov = [0 for i in range(0, (chromosomeSize // window) + 1)]
-        start = 0
-        for pileupcolumn in germSamfile.pileup(chromosome, 0, chromosomeSize):
-            germ_cov[pileupcolumn.pos // window] += pileupcolumn.n
-        for pileupcolumn in tumorSamfile.pileup(chromosome, 0, chromosomeSize):
-            tumor_cov[pileupcolumn.pos // window] += pileupcolumn.n
-        for i in range(0, chromosomeSize // window):
-            relative_interval_cov = 1.0
-            if germ_cov[i] != 0 and tumor_cov != 0:
-                relative_interval_cov = float(tumor_cov[i]) / float(germ_cov[i])
-            start = i * window
-            relative_cov.append( (relative_interval_cov) )
-            coord.append(start)
-    except ValueError as err:
-        cov   = []
-        coord = []
-        print err
-    germSamfile.close()
-    tumorSamfile.close()
+    start = 0
+    germ_cov = [0 for i in range(0, (chromosomeSize // windowSize) + 1 )]
+    tumor_cov = [0 for i in range(0, (chromosomeSize // windowSize) + 1)]
+    for i in range(0, chromosomeSize):
+        germ_cov[ i // windowSize] += germlineCoverageData[i]
+        tumor_cov[i // windowSize] += tumorCoverageData[i]
+    for i in range(0, chromosomeSize // windowSize):
+        relative_interval_cov = 1.0
+        if germ_cov[i] != 0 and tumor_cov[i] != 0:
+            relative_interval_cov = float(tumor_cov[i]) / float(germ_cov[i])
+        start = i * windowSize
+        relative_cov.append( (relative_interval_cov) )
+        coord.append(start)
     return (relative_cov, coord)
 
 
-def buildHmm(minAmpliconLength, maxGap, window):
+def buildHmm(minAmpliconLength, maxGap, windowSize):
     b_bkgd_1 = 0.1
-    a_interstate = b_bkgd_1 ** (2 * minAmpliconLength / window)
-    b_amp_0  = ( a_interstate ) ** (0.5 * window / maxGap)
+    a_interstate = b_bkgd_1 ** (2 * minAmpliconLength / windowSize)
+    b_amp_0  = ( a_interstate ) ** (0.5 * windowSize / maxGap)
     b_amp_1  = 1 - b_amp_0
     b_bkgd_0 = 1 - b_bkgd_1
     bkgdDist = DiscreteDistribution({0: b_bkgd_0, 1: b_bkgd_1})
@@ -124,8 +97,8 @@ def buildObservedSequence(cov, coord, coverageThreshold):
     observedSeq = [1 if x > covAvg + coverageThreshold * covStd else 0 for x in cov]
     return observedSeq
 
-def predictAmpliconesInChromosome(cov, coord, coverageThreshold, minAmpliconLength, maxGap, window):
-    hmm = buildHmm(minAmpliconLength, maxGap, window)
+def predictAmpliconesInChromosome(cov, coord, coverageThreshold, minAmpliconLength, maxGap, windowSize):
+    hmm = buildHmm(minAmpliconLength, maxGap, windowSize)
     observedSeq = buildObservedSequence(cov, coord, coverageThreshold)
     hmm_predictions = hmm.predict( observedSeq, algorithm="viterbi" )
     start = 0
@@ -141,16 +114,72 @@ def printAmpliconInBedFormat(ch, predictedAmplicons):
     if len(predictedAmplicons) > 0:
         print('\n'.join("{}\t{}\t{}".format(ch,  predictedAmplicons[i][0], predictedAmplicons[i][1]) for i in range(0,len(predictedAmplicons))))
 
+def LoadChromosomeCoverageFromBamFile(pathToBam, chromosome, chromosomeSize):
+    samfile = pysam.AlignmentFile(pathToBam, "rb" )
+    cov = []
+    try:
+        cov = [0 for i in range(0, chromosomeSize + 1 )]
+        for pileupcolumn in samfile.pileup(chromosome, 0, chromosomeSize):
+            cov[pileupcolumn.pos] += int(pileupcolumn.n)
+    except ValueError as err:
+        cov   = []
+        print err
+    samfile.close()
+    return cov
+
+def constructPathToCacheFile(pathToBam, chromosome, pathToCacheDir):
+    cacheFileName = os.path.basename(pathToBam) + '.' +  chromosome + '.txt'
+    pathToCacheFile = os.path.join( pathToCacheDir, cacheFileName)
+    return pathToCacheFile
+
+def LoadChromosomeCoverageFromCache(pathToCacheFile):
+    cov = []
+    if os.path.exists(pathToCacheFile):
+        with open(pathToCacheFile, 'r') as cacheFile:
+            cov = cacheFile.readlines()
+            cov = [ int(x) for x in cov ] 
+    return cov
+
+
+def StoreChromosomeCoverageToCache(pathToCacheFile, coverageData):
+    pathToCacheDir = os.path.dirname(pathToCacheFile)
+    if not os.path.exists(pathToCacheDir):
+        os.makedirs(pathToCacheDir)
+    with open(pathToCacheFile, 'w') as cacheFile:
+        for item in coverageData:
+            cacheFile.write('{}\n'.format(item))
+
+def LoadChromosomeCoverage(pathToBam, chromosome, chromosomeSize, pathToCacheDir):
+    pathToCacheFile = constructPathToCacheFile(pathToBam, chromosome, pathToCacheDir)
+    if not os.path.exists(pathToCacheFile):
+        coverageData = LoadChromosomeCoverageFromBamFile(pathToBam, chromosome, chromosomeSize)
+        StoreChromosomeCoverageToCache(pathToCacheFile, coverageData)
+        return coverageData
+    return LoadChromosomeCoverageFromCache(pathToCacheFile)
+        
 
 def getAmpliconsInChromosome(hg19ChromosomeSizesEntry):
-    chromosome, size = hg19ChromosomeSizesEntry
+    chromosome, chromosomeSize = hg19ChromosomeSizesEntry
+    tumorCoverageData = LoadChromosomeCoverage(args.tumor_bam, chromosome, chromosomeSize, args.path_to_cache_dir)
     if args.germline_bam:
-        cov, coord = calculateChromosomeRelativeCoverage(args.tumor_bam, args.germline_bam, chromosome, size, args.window)
+        germlineCoverageData = LoadChromosomeCoverage(args.germline_bam, chromosome, chromosomeSize, args.path_to_cache_dir)
+        cov, coord = calculateChromosomeRelativeCoverage(tumorCoverageData, germlineCoverageData, chromosome, chromosomeSize, args.window)
     else:
-        cov, coord = calculateChromosomeCoverageInBamFile(args.tumor_bam, chromosome, size, args.window)
+        cov, coord = calculateChromosomeCoverageInBamFile(tumorCoverageData, chromosome, chromosomeSize, args.window)
     predictedAmplicons = predictAmpliconesInChromosome(cov, coord, args.cov_thsh, args.min_amplicon_length, args.max_gap, args.window)
     return (chromosome, predictedAmplicons)
     
+def checkInputArguments(args):
+    if not os.path.exists(args.tumor_bam):
+        print("Specified tumor BAM file does not exist")
+        return False
+
+    if args.germline_bam and not os.path.exists(args.germline_bam):
+        print("Specified germline BAM file does not exist")
+        return False
+
+    return True
+
 if __name__ == '__main__':
 #    setAffinity()
     parser = argparse.ArgumentParser(description='Find the amplicons in a BAM file.')
@@ -166,9 +195,20 @@ if __name__ == '__main__':
                         that are considered as a single amplicon. (default is 1000)')
     parser.add_argument('-l','--min-amplicon-length', dest='min_amplicon_length', type=int, default=1000,
                         help='Minimum amplicon length in basepairs to be captured. (default is 1000)')
+    parser.add_argument('-c','--cache-dir', dest='path_to_cache_dir', type=str, default='./.amplicon_finder_cache',
+                        help='Change path to cache dir (default is \'./.amplicon_finder\')')
+    
 
     args = parser.parse_args()
+
     chromosomeList = [ch for ch in getChromosomeListFromBam(args.tumor_bam)]
+    if not os.path.exists( args.path_to_cache_dir ):
+        for chromosome, chromosomeSize in chromosomeList:
+            LoadChromosomeCoverage(args.tumor_bam, chromosome, chromosomeSize, args.path_to_cache_dir)
+            if args.germline_bam:
+                LoadChromosomeCoverage(args.germline_bam, chromosome, chromosomeSize, args.path_to_cache_dir)
+
+
     partinionSize = (len(chromosomeList) + 1) / args.thr_num
     n = (len(chromosomeList) + 1) / args.thr_num
     pool = multiprocessing.pool.ThreadPool(processes=args.thr_num)
