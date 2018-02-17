@@ -4,7 +4,7 @@ Amplicon finder is a HMM-based method for detecting double minute chromosomes am
 
 # Dependencies
 
-AmpliconFinder requires:
+AmpliconFinder requires following python libraries:
 
 ```
 - PySam
@@ -50,3 +50,7 @@ optional arguments:
                         Change path to cache dir (default is
                         './.amplicon_finder')
 </pre>
+
+
+# Output format
+Founded amplicons will be list through the standard output in BED format.
