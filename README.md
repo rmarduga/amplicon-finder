@@ -6,11 +6,9 @@ Amplicon finder is a HMM-based method for detecting double minute chromosomes am
 
 AmpliconFinder requires following python libraries:
 
-```
-- PySam
-- pomegranate
-- NumPy
-```
+* PySam
+* pomegranate
+* NumPy
 
 
 
