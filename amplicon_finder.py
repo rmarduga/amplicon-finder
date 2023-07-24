@@ -123,7 +123,7 @@ def LoadChromosomeCoverageFromBamFile(pathToBam, chromosome, chromosomeSize):
             cov[pileupcolumn.pos] += int(pileupcolumn.n)
     except ValueError as err:
         cov   = []
-        print err
+        print(err)
     samfile.close()
     return cov
 
